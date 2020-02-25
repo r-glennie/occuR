@@ -1,0 +1,12 @@
+Package: occuTMB
+Type: Package
+Title: Fit multi-occasion occupancy models with generalized additive models 
+Version: 0.0.1
+Date: 2020-02-25
+Author: Richard Glennie <rg374@st-andrews.ac.uk>
+Maintainer: Richard Glennie <rg374@st-andrews.ac.uk>
+Description: Fits occupancy models for data observed over more than one occasion (occupancy being constant at each site within occasions). Occupancy probability and detection probability can specified within the generalized additive framework, using mgcv and Template Model Builder to specify and fit models. 
+License: MIT + Licence
+Depends: R (>= 3.5.0), methods, mgcv, data.table, TMB, RcppEigen, Matrix
+LinkingTo: TMB, RcppEigen 
+RoxygenNote: 6.1.1
