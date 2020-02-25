@@ -99,11 +99,16 @@ fit_occu <- function(forms, visit_data, site_data, print = TRUE) {
   # number of occasions 
   nocc <- uniqueN(site_data$occasion)
   # index of first visit each site x occasion
-  ind <- matrix(as.numeric(which(visit_data$visit == 1)), nr = nsites, nc = nocc) - 1
+  wh <- as.numeric(which(visit_data$visit == 1))
+  ind <- matrix(0, nr = nsites, nc = nocc) 
+  ind[visit_data$site[wh], visit_data$occasion[wh]] <- wh - 1
   # total number of detections per site x occasion
-  totsite <- matrix(visit_data[, .(totsite = sum(y)), .(site, occasion)]$totsite, nr = nsites, nc = nocc)
+  nvis <- visit_data[, .(totsite = sum(y), nvisit = .N), .(site, occasion)]
+  totsite <- matrix(0, nr = nsites, nc = nocc)
+  totsite[nvis$site, nvis$occasion] <- nvis$totsite
   # number of visits per site x occasion
-  nvisit <- matrix(visit_data[, .(nvisit = .N), .(site, occasion)]$nvisit, nr = nsites, nc = nocc)
+  nvisit <- matrix(0, nr = nsites, nc = nocc)
+  nvisit[nvis$site, nvis$occasion] <- nvis$nvisit
   
   ## MODEL MATRICES
   # name formulae

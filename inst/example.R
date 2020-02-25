@@ -5,7 +5,7 @@ library(occuTMB)
 ## Setup survey 
 nsites <- 100 # number of sites
 nocc <- 5 # number of occasions
-nvisits <- matrix(10, nr = nsites, nc = nocc) # number of visits per site x occasion 
+nvisits <- matrix(rpois(nsites * nocc, 10), nr = nsites, nc = nocc) # number of visits per site x occasion 
 
 # set up data
 site_data <- CJ(site = 1:nsites, occasion = 1:nocc)
@@ -34,8 +34,8 @@ site_data$hab <- rep(factor(sample(1:3, size = nsites, prob = c(0.2, 0.4, 0.4), 
 site_data$cover <- rnorm(nrow(site_data))
 
 # formulae 
-forms <- list(psi ~ s(occasion, bs = "cs", k = 3), 
-              p ~ s(temp, bs = "cs"))
+forms <- list(psi ~ 1, 
+              p ~ 1)
 
 # name formulae (needed for make_matrices)
 names(forms) <- c(as.character(forms[[1]][[2]]),
@@ -47,8 +47,8 @@ mats <- make_matrices(forms, visit_data, site_data)
 # true parameters 
 beta_psi <- c(0.4)
 beta_p <- c(-0.4)
-z_psi <- c(0.5, -0.2)
-z_p <- rnorm(9)
+z_psi <- NULL
+z_p <- NULL
 
 logit_psi <- mats$X_psi %*% beta_psi 
 if (!is.null(z_psi)) logit_psi <- logit_psi + mats$Z_psi %*% z_psi

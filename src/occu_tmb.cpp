@@ -80,17 +80,19 @@ Type objective_function<Type>::operator() ()
   // LIKELIHOOD 
   for (int s = 0; s < nsites; ++s) {
     for (int occ = 0; occ < nocc; ++occ) {
-       if (totsite(s, occ) > 0) {
-         nll -= log(psi(s + nsites * occ));
-         for (int v = 0; v < nvisit(s, occ); ++v) {
-           nll -= dbinom(y(ind(s, occ) + v), Type(1.0), p(ind(s, occ) + v), true);
+       if (nvisit(s, occ) > 0) {
+         if (totsite(s, occ) > 0) {
+           nll -= log(psi(s + nsites * occ));
+           for (int v = 0; v < nvisit(s, occ); ++v) {
+             nll -= dbinom(y(ind(s, occ) + v), Type(1.0), p(ind(s, occ) + v), true);
+           }
+         } else {
+           Type addllk = 0;
+           for (int v = 0; v < nvisit(s, occ); ++v) {
+            addllk += log(1 - p(ind(s, occ) + v));
+           }
+           nll -= log(psi(s + nsites * occ) * exp(addllk) + 1 - psi(s + nsites * occ));
          }
-       } else {
-         Type addllk = 0;
-         for (int v = 0; v < nvisit(s, occ); ++v) {
-          addllk += log(1 - p(ind(s, occ) + v));
-         }
-         nll -= log(psi(s + nsites * occ) * exp(addllk) + 1 - psi(s + nsites * occ));
        }
     }
   }
