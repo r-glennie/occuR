@@ -16,11 +16,10 @@ Type objective_function<Type>::operator() ()
   
   // DATA 
   DATA_INTEGER(nsites); // number of sites 
-  DATA_INTEGER(nocc); // number of occasions 
+  DATA_VECTOR(nocc); // number of occasions 
   DATA_VECTOR(y); // record in order of site then occasion then visit 
-  DATA_IMATRIX(ind); // index of y for first visit to each site x occasion 
-  DATA_MATRIX(totsite); // total number of detections per site x occasion 
-  DATA_MATRIX(nvisit); // number of visits per site x occasion
+  DATA_VECTOR(totsite); // total number of detections per site x occasion 
+  DATA_VECTOR(nvisit); // number of visits per site x occasion
   DATA_MATRIX(X_psi); // occupancy fixed effects design matrix
   DATA_MATRIX(Z_psi); // occupancy random effects design matrix 
   DATA_SPARSE_MATRIX(S_psi); // occupancy smoothing matrix 
@@ -78,22 +77,25 @@ Type objective_function<Type>::operator() ()
   vector<Type> p = invlogit(logit_p); 
   
   // LIKELIHOOD 
+  int i_psi = 0; 
+  int i_y = 0; 
   for (int s = 0; s < nsites; ++s) {
-    for (int occ = 0; occ < nocc; ++occ) {
-       if (nvisit(s, occ) > 0) {
-         if (totsite(s, occ) > 0) {
-           nll -= log(psi(s + nsites * occ));
-           for (int v = 0; v < nvisit(s, occ); ++v) {
-             nll -= dbinom(y(ind(s, occ) + v), Type(1.0), p(ind(s, occ) + v), true);
-           }
-         } else {
-           Type addllk = 0;
-           for (int v = 0; v < nvisit(s, occ); ++v) {
-            addllk += log(1 - p(ind(s, occ) + v));
-           }
-           nll -= log(psi(s + nsites * occ) * exp(addllk) + 1 - psi(s + nsites * occ));
-         }
-       }
+    for (int k = 0; k < nocc(s); ++k) {
+      if (totsite(i_psi) > 0) {
+        nll -= log(psi(i_psi));
+        for (int v = 0; v < nvisit(i_psi); ++v) {
+          nll -= dbinom(y(i_y), Type(1.0), p(i_y), true);
+          ++i_y;
+        }
+      } else {
+        Type addllk = 0;
+        for (int v = 0; v < nvisit(i_psi); ++v) {
+          addllk += log(1 - p(i_y));
+          ++i_y;
+        }
+        nll -= log(psi(i_psi) * exp(addllk) + 1 - psi(i_psi));
+      }
+      ++i_psi; 
     }
   }
 
