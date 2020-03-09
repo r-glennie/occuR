@@ -20,6 +20,9 @@ Type objective_function<Type>::operator() ()
   DATA_VECTOR(y); // record in order of site then occasion then visit 
   DATA_VECTOR(totsite); // total number of detections per site x occasion 
   DATA_VECTOR(nvisit); // number of visits per site x occasion
+  DATA_SPARSE_MATRIX(vismat); 
+  DATA_VECTOR(z0); 
+  DATA_VECTOR(z1); 
   DATA_MATRIX(X_psi); // occupancy fixed effects design matrix
   DATA_MATRIX(Z_psi); // occupancy random effects design matrix 
   DATA_SPARSE_MATRIX(S_psi); // occupancy smoothing matrix 
@@ -74,30 +77,17 @@ Type objective_function<Type>::operator() ()
   vector<Type> psi = invlogit(logit_psi); 
   vector<Type> logit_p = X_p * beta_p; 
   if (S_p_n(0) > 0) logit_p += Z_p * z_p; 
-  vector<Type> p = invlogit(logit_p); 
   
   // LIKELIHOOD 
   int i_psi = 0; 
   int i_y = 0; 
-  for (int s = 0; s < nsites; ++s) {
-    for (int k = 0; k < nocc(s); ++k) {
-      if (totsite(i_psi) > 0) {
-        nll -= log(psi(i_psi));
-        for (int v = 0; v < nvisit(i_psi); ++v) {
-          nll -= dbinom(y(i_y), Type(1.0), p(i_y), true);
-          ++i_y;
-        }
-      } else {
-        Type addllk = 0;
-        for (int v = 0; v < nvisit(i_psi); ++v) {
-          addllk += log(1 - p(i_y));
-          ++i_y;
-        }
-        nll -= log(psi(i_psi) * exp(addllk) + 1 - psi(i_psi));
-      }
-      ++i_psi; 
-    }
-  }
+  vector<Type> prob = dbinom_robust(y, Type(1.0), logit_p, true); 
+  vector<Type> psite = vismat * prob; 
+  vector<Type> logpsi = log(psi); 
+  vector<Type> log1psi = log(1 - psi);
+  vector<Type> p1 = psite + logpsi; 
+  vector<Type> p0 = log(psi * exp(psite) + 1 - psi); 
+  nll -= (p1 * z1).sum() + (p0 * z0).sum();
 
   return nll;
 }

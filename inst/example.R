@@ -3,31 +3,14 @@
 library(occuTMB)
 
 ## Setup survey 
-nsites <- 100 # number of sites
-nocc <- 5 # number of occasions
-nvisits <- matrix(rpois(nsites * nocc, 5), nr = nsites, nc = nocc) # number of visits per site x occasion 
+nsites <- 1000 # number of sites
+nocc <- 4 # number of occasions
+nvisits <- matrix(5, nr = nsites, nc = nocc) # number of visits per site x occasion 
 
 # set up data
 
 totvisits <- sum(nvisits)
-visit_data <- data.table(site = rep(1, totvisits), occasion = 1, visit = 1, y = 1)
-
-# fill out visit_data
-k <- 1
-for (occ in 1:nocc) {
-  for (site in 1:nsites) {
-    if (nvisits[site, occ] > 0) {
-      v <- 1 
-      for (visit in 1:nvisits[site, occ]) {
-        visit_data$site[k] <- site
-        visit_data$occasion[k] <- occ 
-        visit_data$visit[k] <- v 
-        v <- v + 1
-        k <- k + 1
-      }
-    }
-  }
-}
+visit_data <- CJ(site = 1:nsites, occasion = 1:nocc, visit = 1:max(nvisits))
 
 visit_data <- visit_data[order(site, occasion, visit)]
 site_data <- visit_data[, .(occasion = unique(occasion)), .(site)]
@@ -37,8 +20,12 @@ site_data <- visit_data[, .(occasion = unique(occasion)), .(site)]
 #site_data$hab <- rep(factor(sample(1:3, size = nsites, prob = c(0.2, 0.4, 0.4), replace = TRUE)), nocc)
 #site_data$cover <- rnorm(nrow(site_data))
 
+site_locs <- data.frame(site = 1:nsites, x = rnorm(nsites), y = rnorm(nsites))
+site_data$x <- site_locs$x[site_data$site]
+site_data$y <- site_locs$y[site_data$site]
+
 # formulae 
-forms <- list(psi ~ 1, 
+forms <- list(psi ~ s(x,y, bs="ts"), 
               p ~ 1)
 
 # name formulae (needed for make_matrices)
@@ -50,8 +37,8 @@ mats <- make_matrices(forms, visit_data, site_data)
 
 # true parameters 
 beta_psi <- c(0.4)
-beta_p <- c(-0.4)
-z_psi <- NULL
+beta_p <- c(0.7)
+z_psi <- rnorm(29, 0, 0.1)
 z_p <- NULL
 
 logit_psi <- mats$X_psi %*% beta_psi 
@@ -67,10 +54,11 @@ occu2 <- rep(occu, as.vector(nvisits[nvisits != 0]))
 visit_data$y <- rbinom(totvisits, 1, p * occu2)
 
 ## Fit model
-mod <- fit_occu(forms, visit_data, site_data) 
+start <- list(beta_psi = beta_psi, beta_p = beta_p)
+mod <- fit_occu(forms, visit_data, site_data, start = start) 
 
 ## Look at estimates
-# summary(mod)
+summary(mod)
 # 
 # ## Predict phi and p 
 # pred <- predict(mod, visit_data, site_data)
@@ -107,8 +95,9 @@ mods <- vector(mode = "list", length = nsims)
 for (sim in 1:nsims) {
   cat(sim, " / ", nsims, "\r")
   ## Simulate data
-  occu <- rbinom(nsites * nocc, 1, psi)
-  visit_data$y <- rbinom(totvisits, 1, p * occu[visit_data$site + nsites * (visit_data$occasion - 1)])
+  occu <- rbinom(nrow(site_data), 1, psi)
+  occu2 <- rep(occu, as.vector(nvisits[nvisits != 0]))
+  visit_data$y <- rbinom(totvisits, 1, p * occu2)
   ## Fit model
   mods[[sim]] <- fit_occu(forms, visit_data, site_data, print = FALSE)
 }

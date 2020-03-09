@@ -47,10 +47,10 @@ make_smoothing_matrix <- function(gm) {
 make_matrices <- function(forms, visit_data, site_data) {
   ## occupancy model 
   site_data$psi <- 1:nrow(site_data)
-  gam_psi <- gam(forms[["psi"]], data = site_data, method = "REML")
+  gam_psi <- gam(forms[["psi"]], data = site_data, method = "REML", fit = FALSE)
   site_data <- site_data[, psi := NULL]
   # get design matrix 
-  Xfull <- predict(gam_psi, newdata = site_data, type = "lpmatrix")
+  Xfull <- gam_psi$X #predict(gam_psi, newdata = site_data, type = "lpmatrix")
   X_psi <- Xfull[, 1:gam_psi$nsdf, drop = FALSE]
   Z_psi <- Xfull[, -(1:gam_psi$nsdf), drop = FALSE]
   # get smoothing matrix 
@@ -58,10 +58,10 @@ make_matrices <- function(forms, visit_data, site_data) {
   
   ## detection model 
   visit_data$p <- 1:nrow(visit_data)
-  gam_p <- gam(forms[["p"]], data = visit_data, method = "REML")
+  gam_p <- gam(forms[["p"]], data = visit_data, method = "REML", fit = FALSE)
   visit_data <- visit_data[, p := NULL]
   # get design matrix
-  Xfull <- predict(gam_p, newdata = visit_data, type = "lpmatrix")
+  Xfull <- gam_p$X #predict(gam_p, newdata = visit_data, type = "lpmatrix")
   X_p <- Xfull[, 1:gam_p$nsdf, drop = FALSE]
   Z_p <- Xfull[, -(1:gam_p$nsdf), drop = FALSE]
   # get smoothing matrix
@@ -83,12 +83,14 @@ make_matrices <- function(forms, visit_data, site_data) {
 #' @param forms list of formulae for psi (occupancy) and p (detection) 
 #' @param visit_data data.table with row for each visit with a y column for detection record 
 #' @param site_data data.table with row for each site 
+#' @param start list of starting values for beta_psi, beta_p 
+#' @param print if TRUE then possibly useful info is printed out 
 #' @return fitted occupied model object 
 #' @export
 #' @importFrom data.table uniqueN
 #' @importFrom TMB MakeADFun sdreport normalize
 #' @useDynLib occu_tmb
-fit_occu <- function(forms, visit_data, site_data, print = TRUE) {
+fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
   
   ## DATA 
   # order data 
@@ -102,6 +104,8 @@ fit_occu <- function(forms, visit_data, site_data, print = TRUE) {
   nvis <- visit_data[, .(totsite = sum(y), nvisit = .N), .(site, occasion)]
   totsite <- nvis$totsite
   nvisit <- nvis$nvisit
+  siteocc <- visit_data[,frank(list(site, occasion), ties.method = "dense")]
+  vismat <- sparseMatrix(i = siteocc, j = 1:nrow(visit_data), x = 1, dims = c(length(siteocc), nrow(visit_data)))
 
   ## MODEL MATRICES
   # name formulae
@@ -117,6 +121,9 @@ fit_occu <- function(forms, visit_data, site_data, print = TRUE) {
                   y = visit_data$y, 
                   totsite = totsite, 
                   nvisit = nvisit, 
+                  vismat = vismat, 
+                  z0 = as.numeric(totsite < 0.5), 
+                  z1 = as.numeric(totsite > 0.5), 
                   X_psi = mats$X_psi, 
                   Z_psi = mats$Z_psi, 
                   S_psi = mats$S_psi$S, 
@@ -132,6 +139,10 @@ fit_occu <- function(forms, visit_data, site_data, print = TRUE) {
   # fixed effects 
   beta_psi <- rep(0, ncol(tmb_dat$X_psi))
   beta_p <- rep(0, ncol(tmb_dat$X_p))
+  if (!is.null(start)) {
+    beta_psi <- start$beta_psi 
+    beta_p <- start$beta_p 
+  }
   # random effects 
   # occupancy
   if (is.null(mats$S_psi)) {
