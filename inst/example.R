@@ -3,12 +3,11 @@
 library(occuTMB)
 
 ## Setup survey 
-nsites <- 1000 # number of sites
-nocc <- 4 # number of occasions
+nsites <- 100 # number of sites
+nocc <- 5 # number of occasions
 nvisits <- matrix(5, nr = nsites, nc = nocc) # number of visits per site x occasion 
 
 # set up data
-
 totvisits <- sum(nvisits)
 visit_data <- CJ(site = 1:nsites, occasion = 1:nocc, visit = 1:max(nvisits))
 
@@ -25,8 +24,8 @@ site_data$x <- site_locs$x[site_data$site]
 site_data$y <- site_locs$y[site_data$site]
 
 # formulae 
-forms <- list(psi ~ s(x,y, bs="ts"), 
-              p ~ 1)
+forms <- list(psi ~ 1,  
+              p ~ s(occasion, bs = "ts", k = 5))
 
 # name formulae (needed for make_matrices)
 names(forms) <- c(as.character(forms[[1]][[2]]),
@@ -38,20 +37,18 @@ mats <- make_matrices(forms, visit_data, site_data)
 # true parameters 
 beta_psi <- c(0.4)
 beta_p <- c(0.7)
-z_psi <- rnorm(29, 0, 0.1)
-z_p <- NULL
+z_psi <- NULL#rnorm(29, 0, 0.1)
+z_p <- rnorm(4, 0, 1)
 
-logit_psi <- mats$X_psi %*% beta_psi 
-if (!is.null(z_psi)) logit_psi <- logit_psi + mats$Z_psi %*% z_psi
-logit_p <- mats$X_p %*% beta_p 
-if (!is.null(z_p)) logit_p <- logit_p + + mats$Z_p %*% z_p
+logit_psi <- (mats$X_psi %*% c(beta_psi, z_psi))[attr(mats$X_psi, "index")]
+logit_p <- (mats$X_p %*% c(beta_p, z_p))[attr(mats$X_p, "index")] 
 psi <- plogis(logit_psi)
 p <- plogis(logit_p)
 
 ## Simulate survey 
 occu <- rbinom(nrow(site_data), 1, psi)
 occu2 <- rep(occu, as.vector(nvisits[nvisits != 0]))
-visit_data$y <- rbinom(totvisits, 1, p * occu2)
+visit_data$obs <- rbinom(totvisits, 1, p * occu2)
 
 ## Fit model
 start <- list(beta_psi = beta_psi, beta_p = beta_p)
@@ -59,15 +56,22 @@ mod <- fit_occu(forms, visit_data, site_data, start = start)
 
 ## Look at estimates
 summary(mod)
-# 
-# ## Predict phi and p 
-# pred <- predict(mod, visit_data, site_data)
-# 
-# ## Predict for certain covariates
-# new_site_data <- data.table(site = 1:5, occasion = 1:5)
-# pred2 <- predict(mod, visit_data, new_site_data, nboot = 100)
-# 
-# plot(1:5, pred2$psi, type = "b")
+
+## Predict phi and p
+pred <- predict(mod, visit_data, site_data)
+
+plot(p, pred$p)
+abline(a = 0, b = 1)
+
+plot(1:nocc, psi[seq(50, length(psi), by = 100)], type = "p", pch = 19)
+lines(1:nocc, pred$psi[seq(50, length(psi), by = 100)], type = "b", pch = 19, col = "red")
+
+## Predict for certain covariates
+#new_site_data <- data.table(site = 1:10, occasion = 1:10)
+#pred2 <- predict(mod, visit_data, new_site_data, nboot = 100)
+
+#plot(1:10, pred2$psi, type = "b")
+
 # matlines(t(pred2$psiboot), col = "grey80")
 # ucl <- apply(pred2$psiboot, 2, quantile, probs = 0.975)
 # lcl <- apply(pred2$psiboot, 2, quantile, probs = 0.025)
@@ -97,12 +101,10 @@ for (sim in 1:nsims) {
   ## Simulate data
   occu <- rbinom(nrow(site_data), 1, psi)
   occu2 <- rep(occu, as.vector(nvisits[nvisits != 0]))
-  visit_data$y <- rbinom(totvisits, 1, p * occu2)
+  visit_data$obs <- rbinom(totvisits, 1, p * occu2)
   ## Fit model
   mods[[sim]] <- fit_occu(forms, visit_data, site_data, print = FALSE)
 }
 
 ests <- sapply(mods, FUN = function(x) {x$res$par.fixed})
 rowMeans(ests)
-# zests <- sapply(mods, FUN = function(x) {x$res$par.random[names(x$res$par.random) == "z_psi"]})
-# rowMeans(zests)

@@ -20,15 +20,12 @@ Type objective_function<Type>::operator() ()
   DATA_VECTOR(y); // record in order of site then occasion then visit 
   DATA_VECTOR(totsite); // total number of detections per site x occasion 
   DATA_VECTOR(nvisit); // number of visits per site x occasion
-  DATA_SPARSE_MATRIX(vismat); 
-  DATA_VECTOR(z0); 
-  DATA_VECTOR(z1); 
   DATA_MATRIX(X_psi); // occupancy fixed effects design matrix
-  DATA_MATRIX(Z_psi); // occupancy random effects design matrix 
+  DATA_IVECTOR(psi_ind); // index of design matrix X_psi
   DATA_SPARSE_MATRIX(S_psi); // occupancy smoothing matrix 
   DATA_IVECTOR(S_psi_n); // detection dimension of smoothing matrix
   DATA_MATRIX(X_p); // detection fixed effects design matrix
-  DATA_MATRIX(Z_p); // detection random effects design matrix 
+  DATA_IVECTOR(p_ind); // index of design matrix X_p
   DATA_SPARSE_MATRIX(S_p); // detection smoothing matrix 
   DATA_IVECTOR(S_p_n); // detection dimension of smoothing matrix
   
@@ -72,22 +69,43 @@ Type objective_function<Type>::operator() ()
   if (flag == 0) return nll; 
   
   // LINEAR PREDICTORS 
-  vector<Type> logit_psi = X_psi * beta_psi; 
-  if (S_psi_n(0) > 0) logit_psi += Z_psi * z_psi; 
+  matrix<Type> X_psiL = X_psi.leftCols(beta_psi.size()); 
+  vector<Type> logit_psi = X_psiL * beta_psi; 
+  if (S_psi_n(0) > 0) {
+    matrix<Type> X_psiR = X_psi.rightCols(z_psi.size());
+    logit_psi += X_psiR * z_psi; 
+  }
   vector<Type> psi = invlogit(logit_psi); 
-  vector<Type> logit_p = X_p * beta_p; 
-  if (S_p_n(0) > 0) logit_p += Z_p * z_p; 
+  matrix<Type> X_pL = X_p.leftCols(beta_p.size());
+  vector<Type> logit_p = X_pL  * beta_p; 
+  if (S_p_n(0) > 0) {
+    matrix<Type> X_pR = X_p.rightCols(z_p.size());
+    logit_p += X_pR * z_p; 
+  }
+  vector<Type> p = invlogit(logit_p); 
   
   // LIKELIHOOD 
-  int i_psi = 0; 
-  int i_y = 0; 
-  vector<Type> prob = dbinom_robust(y, Type(1.0), logit_p, true); 
-  vector<Type> psite = vismat * prob; 
-  vector<Type> logpsi = log(psi); 
-  vector<Type> log1psi = log(1 - psi);
-  vector<Type> p1 = psite + logpsi; 
-  vector<Type> p0 = log(psi * exp(psite) + 1 - psi); 
-  nll -= (p1 * z1).sum() + (p0 * z0).sum();
+  int i_psi = 0;
+  int i_y = 0;
+  for (int s = 0; s < nsites; ++s) {
+    for (int k = 0; k < nocc(s); ++k) {
+      if (totsite(i_psi) > 0) {
+        nll -= log(psi(psi_ind(i_psi)));
+        for (int v = 0; v < nvisit(i_psi); ++v) {
+          nll -= dbinom(y(i_y), Type(1.0), p(p_ind(i_y)), true);
+          ++i_y;
+        }
+      } else {
+        Type addllk = 0;
+        for (int v = 0; v < nvisit(i_psi); ++v) {
+          addllk += log(1 - p(p_ind(i_y)));
+          ++i_y;
+        }
+        nll -= log(psi(psi_ind(i_psi)) * exp(addllk) + 1 - psi(psi_ind(i_psi)));
+      }
+      ++i_psi;
+    }
+  }
 
   return nll;
 }

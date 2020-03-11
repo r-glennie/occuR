@@ -1,4 +1,4 @@
-Package: occuTMB
+Package: occuR
 Type: Package
 Title: Fit multi-occasion occupancy models with generalized additive models 
 Version: 0.0.1

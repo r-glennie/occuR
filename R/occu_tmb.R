@@ -51,8 +51,7 @@ make_matrices <- function(forms, visit_data, site_data) {
   site_data <- site_data[, psi := NULL]
   # get design matrix 
   Xfull <- gam_psi$X #predict(gam_psi, newdata = site_data, type = "lpmatrix")
-  X_psi <- Xfull[, 1:gam_psi$nsdf, drop = FALSE]
-  Z_psi <- Xfull[, -(1:gam_psi$nsdf), drop = FALSE]
+  X_psi <- uniquecombs(Xfull)
   # get smoothing matrix 
   S_psi <- make_smoothing_matrix(gam_psi)
   
@@ -62,18 +61,17 @@ make_matrices <- function(forms, visit_data, site_data) {
   visit_data <- visit_data[, p := NULL]
   # get design matrix
   Xfull <- gam_p$X #predict(gam_p, newdata = visit_data, type = "lpmatrix")
-  X_p <- Xfull[, 1:gam_p$nsdf, drop = FALSE]
-  Z_p <- Xfull[, -(1:gam_p$nsdf), drop = FALSE]
+  X_p <- uniquecombs(Xfull)
   # get smoothing matrix
   S_p <- make_smoothing_matrix(gam_p)
   
   ## results 
   res <- list(X_psi = X_psi, 
-              Z_psi = Z_psi, 
-              S_psi = S_psi, 
+              S_psi = S_psi,
+              nfix_psi = gam_psi$nsdf, 
               X_p = X_p, 
-              Z_p = Z_p,
-              S_p = S_p)
+              S_p = S_p, 
+              nfix_p = gam_p$nsdf)
   
   return(res)
 }
@@ -101,11 +99,9 @@ fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
   # number of occasions 
   nocc <- site_data[, .(n = .N), .(site)]$n
   # total number of detections per site x occasion
-  nvis <- visit_data[, .(totsite = sum(y), nvisit = .N), .(site, occasion)]
+  nvis <- visit_data[, .(totsite = sum(obs), nvisit = .N), .(site, occasion)]
   totsite <- nvis$totsite
   nvisit <- nvis$nvisit
-  siteocc <- visit_data[,frank(list(site, occasion), ties.method = "dense")]
-  vismat <- sparseMatrix(i = siteocc, j = 1:nrow(visit_data), x = 1, dims = c(length(siteocc), nrow(visit_data)))
 
   ## MODEL MATRICES
   # name formulae
@@ -118,18 +114,15 @@ fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
   tmb_dat <- list(flag = 1L, 
                   nsites = nsites, 
                   nocc = nocc, 
-                  y = visit_data$y, 
+                  y = visit_data$obs, 
                   totsite = totsite, 
                   nvisit = nvisit, 
-                  vismat = vismat, 
-                  z0 = as.numeric(totsite < 0.5), 
-                  z1 = as.numeric(totsite > 0.5), 
                   X_psi = mats$X_psi, 
-                  Z_psi = mats$Z_psi, 
+                  psi_ind = attr(mats$X_psi, "index") - 1, 
                   S_psi = mats$S_psi$S, 
                   S_psi_n = as.integer(mats$S_psi$Scols), 
                   X_p = mats$X_p, 
-                  Z_p = mats$Z_p, 
+                  p_ind = attr(mats$X_p, "index") - 1, 
                   S_p = mats$S_p$S, 
                   S_p_n = as.integer(mats$S_p$Scols))
   
@@ -137,8 +130,8 @@ fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
   map <- list()
   random <- NULL
   # fixed effects 
-  beta_psi <- rep(0, ncol(tmb_dat$X_psi))
-  beta_p <- rep(0, ncol(tmb_dat$X_p))
+  beta_psi <- rep(0, mats$nfix_psi)
+  beta_p <- rep(0, mats$nfix_p)
   if (!is.null(start)) {
     beta_psi <- start$beta_psi 
     beta_p <- start$beta_p 
@@ -152,7 +145,7 @@ fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
     tmb_dat$S_psi_n <- -1
     map <- c(map, list(z_psi = as.factor(NA), log_lambda_psi = as.factor(NA)))
   } else {
-    z_psi <- rep(0, ncol(tmb_dat$Z_psi)) 
+    z_psi <- rep(0, ncol(mats$X_psi) - mats$nfix_psi) 
     log_lambda_psi <- rep(0, length(tmb_dat$S_psi_n)) 
     random <- c(random, "z_psi")
   }
@@ -164,7 +157,7 @@ fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
     tmb_dat$S_p_n <- -1 
     map <- c(map, list(z_p = as.factor(NA), log_lambda_p = as.factor(NA)))
   } else {
-    z_p <- rep(0, ncol(tmb_dat$Z_p)) 
+    z_p <- rep(0, ncol(mats$X_p) - mats$nfix_p) 
     log_lambda_p <- rep(0, length(tmb_dat$S_p_n)) 
     random <- c(random, "z_p")
   }
@@ -223,10 +216,8 @@ summary.occu <- function(obj) {
 get_predicted_values <- function(fix, ran, mats) {
   nms_fix <- names(fix)
   nms_ran <- names(ran)
-  psi_pred <- mats$X_psi %*% fix[nms_fix == "beta_psi"] 
-  if (!is.null(mats$Z_psi)) psi_pred <- psi_pred + mats$Z_psi %*% ran[nms_ran == "z_psi"]
-  p_pred <- mats$X_p %*% fix[nms_fix == "beta_p"] 
-  if (!is.null(mats$Z_p)) p_pred <- p_pred + mats$Z_p %*% ran[nms_ran == "z_p"]
+  psi_pred <- (mats$X_psi %*% c(fix[nms_fix == "beta_psi"], ran[nms_ran == "z_psi"]))[attr(mats$X_psi, "index")]
+  p_pred <- (mats$X_p %*% c(fix[nms_fix == "beta_p"], ran[nms_ran == "z_p"]))[attr(mats$X_p, "index")]
   psi_pred <- plogis(psi_pred)
   p_pred <- plogis(p_pred)
   return(list(psi = psi_pred, p = p_pred))
@@ -308,14 +299,14 @@ edf.occu <- function(X, S, lambda, Sn){
 #'
 #' @return degrees of freedom (see "by" above)
 #' @export
-dof.occu <- function(obj, by = FALSE) {
+dof.occu <- function(obj, each = FALSE) {
   fix <- obj$res$par.fixed
   df <- length(fix[!grepl("log_lambda", names(fix))])
   psi_lambda <- exp(fix[names(fix) == "log_lambda_psi"])
-  psi_edf <- edf.occu(obj$mats$Z_psi, obj$mats$S_psi$S, psi_lambda, obj$mats$S_psi$Scols)
+  psi_edf <- edf.occu(obj$mats$X_psi[, -(1:obj$mats$nfix_psi)], obj$mats$S_psi$S, psi_lambda, obj$mats$S_psi$Scols)
   p_lambda <- exp(fix[names(fix) == "log_lambda_p"])
-  p_edf <- edf.occu(obj$mats$Z_p, obj$mats$S_p$S, p_lambda, obj$mats$S_p$Scols)
-  if (by) return(list(fix = df, psi = psi_edf, p = p_edf))
+  p_edf <- edf.occu(obj$mats$X_p[, -(1:obj$mats$nfix_p)], obj$mats$S_p$S, p_lambda, obj$mats$S_p$Scols)
+  if (each) return(list(fix = df, psi = psi_edf, p = p_edf))
   return(df + psi_edf + p_edf)
 }
 
