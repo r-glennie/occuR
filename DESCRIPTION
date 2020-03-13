@@ -10,3 +10,7 @@ License: MIT + Licence
 Depends: R (>= 3.5.0), methods, mgcv, data.table, TMB, RcppEigen, Matrix
 LinkingTo: TMB, RcppEigen 
 RoxygenNote: 6.1.1
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

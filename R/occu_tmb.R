@@ -47,20 +47,20 @@ make_smoothing_matrix <- function(gm) {
 make_matrices <- function(forms, visit_data, site_data) {
   ## occupancy model 
   site_data$psi <- 1:nrow(site_data)
-  gam_psi <- gam(forms[["psi"]], data = site_data, method = "REML", fit = FALSE)
+  gam_psi <- gam(forms[["psi"]], data = site_data, method = "REML")
   site_data <- site_data[, psi := NULL]
   # get design matrix 
-  Xfull <- gam_psi$X #predict(gam_psi, newdata = site_data, type = "lpmatrix")
+  Xfull <- predict(gam_psi, newdata = site_data, type = "lpmatrix")
   X_psi <- uniquecombs(Xfull)
   # get smoothing matrix 
   S_psi <- make_smoothing_matrix(gam_psi)
   
   ## detection model 
   visit_data$p <- 1:nrow(visit_data)
-  gam_p <- gam(forms[["p"]], data = visit_data, method = "REML", fit = FALSE)
+  gam_p <- gam(forms[["p"]], data = visit_data, method = "REML")
   visit_data <- visit_data[, p := NULL]
   # get design matrix
-  Xfull <- gam_p$X #predict(gam_p, newdata = visit_data, type = "lpmatrix")
+  Xfull <- predict(gam_p, newdata = visit_data, type = "lpmatrix")
   X_p <- uniquecombs(Xfull)
   # get smoothing matrix
   S_p <- make_smoothing_matrix(gam_p)
@@ -71,7 +71,9 @@ make_matrices <- function(forms, visit_data, site_data) {
               nfix_psi = gam_psi$nsdf, 
               X_p = X_p, 
               S_p = S_p, 
-              nfix_p = gam_p$nsdf)
+              nfix_p = gam_p$nsdf,
+              gam_p = gam_p, 
+              gam_psi = gam_psi)
   
   return(res)
 }
@@ -207,19 +209,13 @@ fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
 #' @return stops execution if input is invalid 
 check_inp <- function(forms, visit_data, site_data, start, print) {
   
-  # check forms
-  if (class(forms) != "list") stop("forms must be a named list")
-  if (! (length(forms) == 2 & "p" %in% names(forms) & "psi" %in% names(forms))) {
-    stop("forms must be a named list with at least 'p' and 'psi' elements")
-  }
-  if (class(forms$p) != "formula" | class(forms$psi) != "formula") stop("Invalid formula")
-  
   # check visit_data 
   if (!("data.table" %in% class(visit_data))) stop("visit_data should be a data.table")
   if (!("obs" %in% colnames(visit_data))) stop("visit_data does not have a column named 'obs'")
   if (!("site" %in% colnames(visit_data))) stop("visit_data does not have a column named 'site'")
   if (!("occasion" %in% colnames(visit_data))) stop("visit_data does not have a column named 'occasion'")
   if (!("visit" %in% colnames(visit_data))) stop("visit_data does not have a column named 'visit'")
+  if ("p" %in% colnames(visit_data)) stop("visit_data cannot have a column named 'p'")
   num <- visit_data[, .(max = max(visit), n = uniqueN(visit)), .(site, occasion)]
   if (any(num$max != num$n)) stop("visit_data has missing visits or visits are mis-numbered: ", num[which(num$max != num$n),])
   if (any(abs(visit_data$obs) > 1e-10 & abs(visit_data$obs - 1) > 1e-10)) stop("visit_data obs has entries that are not zero or one")
@@ -229,6 +225,7 @@ check_inp <- function(forms, visit_data, site_data, start, print) {
   if (any(num$max != num$n)) stop("site_data has missing sites or sites are mis-numered: ", num[which(num$max  != num$n,)])
   num <- site_data[, .(max = max(occasion), n = uniqueN(occasion))]
   if (any(num$max != num$n)) stop("site_data has missing occasions or occasions are mis-numered")
+  if ("psi" %in% colnames(site_data)) stop("site_data cannot have a column named 'psi'")
   
   # consistency between visit_data and site_data
   if (!all(visit_data$site %in% site_data$site)) stop("visit_data has sites not included in site_data")
@@ -261,6 +258,8 @@ summary.occuR <- function(obj, conf.level = 0.95) {
   lcl <- est - qnorm(alpha) * sd
   ucl <- est + qnorm(alpha) * sd
   val <- data.frame(estimate = est, sd = sd, lcl = lcl, ucl = ucl)
+  val <- val[1:(obj$mats$nfix_psi + obj$mats$nfix_p),]
+  nms <- nms[1:(obj$mats$nfix_psi + obj$mats$nfix_p)]
   val <- signif(val, 4)
   nms[nms == "beta_psi"] <- paste("psi:", colnames(obj$mats$X_psi[,1:obj$mats$nfix_psi, drop=FALSE]))
   nms[nms == "beta_p"] <- paste("p:", colnames(obj$mats$X_p[,1:obj$mats$nfix_p, drop = FALSE]))
@@ -291,8 +290,8 @@ print.occuR <- function(obj) {
 get_predicted_values <- function(fix, ran, mats) {
   nms_fix <- names(fix)
   nms_ran <- names(ran)
-  psi_pred <- (mats$X_psi %*% c(fix[nms_fix == "beta_psi"], ran[nms_ran == "z_psi"]))[attr(mats$X_psi, "index")]
-  p_pred <- (mats$X_p %*% c(fix[nms_fix == "beta_p"], ran[nms_ran == "z_p"]))[attr(mats$X_p, "index")]
+  psi_pred <- (mats$X_psi %*% c(fix[nms_fix == "beta_psi"], ran[nms_ran == "z_psi"]))
+  p_pred <- (mats$X_p %*% c(fix[nms_fix == "beta_p"], ran[nms_ran == "z_p"]))
   psi_pred <- plogis(psi_pred)
   p_pred <- plogis(p_pred)
   return(list(psi = psi_pred, p = p_pred))
@@ -310,7 +309,13 @@ get_predicted_values <- function(fix, ran, mats) {
 #' @export
 #' @importFrom mgcv rmvn
 predict.occuR <- function(obj, visit_data, site_data, nboot = 0) {
-  mats <- make_matrices(obj$forms, visit_data, site_data)
+  mats <- obj$mats 
+  site_data$psi <- 1:nrow(site_data)
+  mats$X_psi <- predict(mats$gam_psi, newdata = site_data, type = "lpmatrix")
+  site_data <- site_data[, psi := NULL]
+  visit_data$p <- 1:nrow(visit_data)
+  mats$X_p <- predict(mats$gam_p, newdata = visit_data, type = "lpmatrix")
+  visit_data <- visit_data[, p := NULL]
   fix <- obj$res$par.fixed
   ran <- obj$res$par.random
   pred <- get_predicted_values(fix, ran, mats)
@@ -394,7 +399,7 @@ dof.occuR <- function(obj, each = FALSE) {
 #' @export
 logLik.occuR <- function(object, ...) {
   val <- -object$fit$objective 
-  attributes(val)$df <- dof.occu(object)
+  attributes(val)$df <- dof.occuR(object)
   return(val)
 }
 

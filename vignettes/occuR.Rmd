@@ -1,0 +1,233 @@
+---
+title: "occuR"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{occuR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(occuR)
+library(ggplot2)
+```
+```{r include = FALSE}
+data(example_analysis)
+```
+
+The `occuR` package is used to fit multi-occasion occupancy models where occupancy and detection probability can depend smoothly on covariates (using `mgcv` as a back-end). Models are fit using `TMB` (Template model builder). 
+
+In this vignette, the model is briefly explained, look at some example data, and how to perform an example analysis. The example data and fitted models can be accessed using `data(example_analysis)`. 
+
+# Model 
+
+The multi-occasion occupancy survey is considered to have the following structure: space is divided into <b>sites</b> which are surveyed over one or more <b>occasions</b> by being <b>visit</b>ed one or more times on one or more occasions. What do these words mean? 
+
+- <b> Site </b>: A site is a single spatial unit that is considered to either be occupied by the species or not. 
+
+- <b> Occasion </b>: An occasion is a period of time over which occupancy is defined, i.e., a site is termed occupied if the target species uses that site at least once during the occasion. 
+
+- <b> Visit </b>: A visit denotes a period of time where a site has been surveyed and it is recorded whether or not the target species was detected within the site during that time. 
+
+What period of time qualifies as an occasion and what qualifies as a visit is up to the discretion of the analyst: choose them in order for inference to be made on a temporal scale that is meaningful for the target species and the decision-making on which the inferece would have impact. 
+
+The model has two important probabilities: 
+
+- $\psi_{i, j}$ is the probability a site $i$ is occupied in occasion $j$; 
+
+- $p_{i,j,k}$ is the probability the target species is detected in site $i$ in occasion $j$ on visit $k$ given the site is occupied in that occasion. 
+
+Notice, that occupancy probability can change by site or occasion (or by covariates that change with site or occasion or both); detection probability can change with site, occasion, and visit (and with covariates that vary with these). In particular, occupancy and detection probability can be a smooth function of covariates within the generalized additive modelling framework, see the `mgcv` package. 
+
+This approach to multi-occasion occupancy modelling differs from the hidden Markov model approach where site occupancy is a Markov process over time; here, site occupancy is independent over time conditional on the occupancy probability --- correlation of site occupancy over space and time is induced by allowing occupancy probability to be a smooth function of space and time. 
+
+# Example Data 
+
+Data should be formatted into two data tables. Data tables are `R` objects created using the `data.table` R package (which is optimised for large data sets). The two objects will be called `visit_data` and `site_data`. 
+
+Here is an example of the `visit_data` data table: 
+
+```{r}
+visit_data 
+```
+
+The columns which are essential are "site" (which site the visit took place on), "occasion" (in which occasion the visit took place), "visit" (which visit this refers to), and "obs" (whether or not the target species was detected). One important thing to note is that visits should be numbered 1, 2, 3, ... within each site and occasion. So, the visit column will be 1 for every first visit to each site on each occasion. 
+The remaining columns are covariates defined for each visit. The covariate `temp` is the air temperature on each visit since for this example there is an hypothesis this temperature affects the availability of the target species (it comes out only a specific temperatures) --- notice this: detection probability is not only a model of how well recorders can detect species but also how available the species are for detection. Moreover, detection probability can model the occurrence of a species within occasion (for example if month or day of year were used as a covariate). The other covariate is `hab`, the habitat type for that site, this does change over visits but must be included in `visit_data` if I want to model how detection probability changes with habitat type. So, in general, all covariates that affect $p$ must be in a column of `visit_data`. 
+
+Let's look at `site_data`: 
+
+```{r}
+site_data
+```
+
+The essential columns in `site_data` are "site" (all sites are numbered 1 upwards), "occasion" (occasions are numbered 1 upwards, but not every site must be included for every occasion). The remaining columns are covariates: `hab` the habitat type and geographic coordinates `x` and `y`. Any covariates I want to use when modelling $psi$ must be included as a column in `site_data`. 
+
+Overall, it is important to remember that $p$ can change for each visit and the information in each row of `visit_data` allows us to predict $p$ for each visit; $psi$ can only change for each site on each occasion and so each row of `site_data` contains the information to predict $psi$. 
+
+# Fitting the Basic Model
+
+The basic model has a constant for $psi$ and $p$. 
+
+```{r, eval = FALSE}
+m0 <- fit_occu(list(psi ~ 1, p ~ 1), visit_data, site_data) 
+```
+
+The function `fit_occu` is used to fit the model. It accepts a list of two formulae: one for $psi$ and one for $p$; it also requires the visit data and site data to be given (the order matters). Here I specify just an intercept model. When fitting, unless the `print` argument is used in `fit_occu`, some output is printed to the screen. This output is produced by the `TMB` package and may be useful if model fitting fails. 
+
+```{r}
+m0
+```
+
+The model output returns the estimate, standard deviation (of the estimator), and a $95\%$ confidence interval (the confidence level can be controlled with the `conf.level` argument for the `summary` function). 
+
+The link function used for both probabilities is the logit function, so to translate to the response scale: 
+```{r}
+plogis(-0.03992) 
+plogis(0.55410)
+```
+
+## Fixed Effect Models 
+
+Fixed effects (by which I mean no nonparametric smooths) you can include as with simple linear regression in `R` with the `lm` function. 
+
+For example, suppose I want to fit a model where $psi$ depends on habitat: 
+
+```{r, eval = FALSE}
+m_psihab <- fit_occu(list(psi ~ hab, p ~ 1), visit_data, site_data)
+```
+```{r}
+m_psihab
+```
+
+We can compare this model to the basis model by AIC: 
+```{r}
+AIC(m0, m_psihab)
+```
+
+There is evidence to retain the habitat variable on $psi$. 
+
+We can do the same with $p$ and temperature: 
+
+```{r, eval = FALSE}
+m_temp <- fit_occu(list(psi ~ hab, p ~ temp), visit_data, site_data)
+```
+```{r}
+m_temp
+AIC(m_psihab, m_temp)
+```
+
+Again, some evidence of temperature effect. Yet, this is just a linear effect. It is possible temperature has a non-linear effect. 
+
+
+## Smooth effects 
+
+Let's fit a model with a smooth effect for temperature on $p$: 
+```{r, eval = FALSE}
+m_temps <- fit_occu(list(psi ~ hab, p ~ s(temp, bs = "cs")), visit_data, site_data)
+````
+```{r}
+m_temps
+AIC(m_temps, m_temp)
+```
+
+First, notice that (for now) only splines with basis of "cs" or "ts" are well defined for this package and you must specify one of these for every smooth.   
+
+Now, notice in the output for the model that it reports the effective degrees of freedom for the model as a whole (total edf) and for each parameter separately. The edf is not a whole number because smooths have parameters that are correlated and so have an effective degrees of freedom less than the total number of parameters in the model. This is well explained for generalised additive models as in `mgcv`. The AIC is also corrected for the effective degrees of freedom of the smooth. We see that there is evidence that temperature has a non-linear effect. 
+
+One thing to note is the reported effective degrees of freedom for each parameter $p$/$psi$ separately. When fitting smooths in `mgcv` there is a argument `k` that species the number of knots before penalization. See `?choose.k` in `mgcv` for full information. In this case, `k` is $10$ meaning that the maximum degrees of freedom for `p` is $9$ (it is always $k$ - 1 because smooths are constrained to sum to zero and so lose one degree of freedom automatically). We see for this model the edf for $p$ is 8.9 which means it has reached the maximum allowable. This indicates we should increase `k` to allow $p$ to explore greater flexibility. 
+
+```{r, eval = FALSE}
+m_temps <- fit_occu(list(psi ~ hab, p ~ s(temp, bs = "cs", k = 20)), visit_data, site_data)
+```
+
+Once, the edf is clearly less than `k`, we can continue with the analysis. For this example, we will continue with $k = 10$. 
+
+# Temporal effects 
+
+We can also include smooths over time on either paramater: 
+```{r, eval = FALSE}
+m_pt <- fit_occu(list(psi ~ hab, p ~ s(temp, bs = "cs") + s(occasion, bs = "cs", k = 5)), visit_data, site_data)
+m_psit <- fit_occu(list(psi ~ hab + s(occasion, bs = "cs", k = 5), p ~ s(temp, bs = "cs") + s(occasion, bs = "cs", k = 5)), visit_data, site_data)
+```
+```{r}
+AIC(m_temps, m_pt, m_psit)
+```
+
+We can see that AIC supports a model where $p$ is occasion-varying but not $psi$ --- that is, there is no evidence that $psi$ changes over time; no trend in occupancy. 
+
+Also, note that since ther are only five occasions, $k = 5$ is a hard upper limit we must set. 
+
+# Spatio-temporal effects 
+
+We can also consider a smooth where $psi$ changes by location $(x,y)$ and by occasion. One way to do this is to specify a two-dimensional smooth over space and a one-dimensional smooth over occasion that interaction in a tensor product spline. For this package, only "t2" tensor products are well-defined. 
+
+```{r, eval =  FALSE}
+m_psi_xyt <- fit_occu(list(psi ~ t2(x, y, occasion, bs = c("ts", "cs"), d = c(2, 1)) + hab, 
+                           p ~ s(temp, bs = "cs") + s(occasion, bs = "cs", k = 5)), visit_data, site_data)
+```
+
+For this smooth, we specify `d = c(2, 1)` to mean the first spline is a two-dimensional spline for space, corresponding to $(x,y)$, and a one-dimensional spline for occasion. 
+
+# Predictions 
+
+Suppose we decide to use model `m_psi_xyt` to predict the estimated relationships. We shall rename the model `m` for brevity. Below I show how to use the `predict` function to plot these relationships. It works just as with the `predict` function for `lm` models or `gam` models with the difference that you must supply both `visit_data` and `site_data`, providing newdata for these according to what you with the predict for. 
+
+
+```{r}
+# temperature effect 
+tempgr <- seq(-5, 25, 0.1)
+pred_temp <- predict(m, data.table(occasion = 1, temp = tempgr), site_data, nboot = 1000)
+ci <- apply(pred_temp$pboot, 2, quantile, prob = c(0.025, 0.975))
+plot(tempgr, pred_temp$p, type = "l", lwd = 1.5, ylim = c(min(ci[1,]), max(ci[2,])), xlab = "Temperature", ylab = "Detection Probability")
+lines(tempgr, ci[1,], lty = "dotted")
+lines(tempgr, ci[2,], lty = "dotted")
+```
+
+```{r}
+# occasion effect 
+pred_occ <- predict(m, data.table(occasion = 1:nocc, temp = 18), site_data, nboot = 1000)
+ci <- apply(pred_occ$pboot, 2, quantile, prob = c(0.025, 0.975))
+plot(1:nocc, pred_occ$p, type = "b", pch = 19, lwd = 1.5, ylim = c(min(ci[1,]), max(ci[2,])), xlab = "Temperature", ylab = "Detection Probability")
+lines(1:nocc, ci[1,], lty = "dotted")
+lines(1:nocc, ci[2,], lty = "dotted")
+```
+
+```{r}
+# spatial effect 
+xgr <- seq(-2, 2.5, 0.1)
+ygr <- seq(-2, 2.5, 0.1)
+gr <- expand.grid(xgr, ygr)
+pred_xy <- predict(m, visit_data, data.table(occasion = 1, x = gr[,1], y = gr[,2], hab = "arable"), nboot = 1000)
+
+ggplot() + 
+  geom_tile(aes(x = gr[,1], y = gr[,2], fill = pred_xy$psi)) + 
+  theme_bw() + 
+  scale_x_continuous("x") + 
+  scale_y_continuous("y") + 
+  scale_fill_viridis_c("Occupancy")
+```
+```{r}
+# spatio-temporal effect 
+xgr <- rep(gr[,1], nocc)
+ygr <- rep(gr[,2], nocc)
+tgr <- rep(1:nocc, each = nrow(gr))
+pred_xyt <- predict(m, visit_data, data.table(occasion = tgr, x = xgr, y = ygr, hab = "arable"), nboot = 1000)
+
+ggplot(data.frame(x = xgr, y = ygr, t = tgr, psi = pred_xyt$psi)) + 
+  geom_tile(aes(x = x, y = y, group = t, fill = psi)) + 
+  theme_bw() + 
+  facet_wrap(~t) + 
+  scale_x_continuous("x") + 
+  scale_y_continuous("y") + 
+  scale_fill_viridis_c("Occupancy")
+```
+
+
+

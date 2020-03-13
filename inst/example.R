@@ -1,31 +1,32 @@
 ## Occupancy example 
 
-library(occuTMB)
+library(occuR)
+library(ggplot2)
+set.seed(53930)
 
 ## Setup survey 
 nsites <- 100 # number of sites
 nocc <- 5 # number of occasions
-nvisits <- matrix(5, nr = nsites, nc = nocc) # number of visits per site x occasion 
+nvisits <- 10 # number of visits per site x occasion 
 
 # set up data
-totvisits <- sum(nvisits)
-visit_data <- CJ(site = 1:nsites, occasion = 1:nocc, visit = 1:max(nvisits))
-
+totvisits <- nvisits * nsites * nocc
+visit_data <- CJ(site = 1:nsites, occasion = 1:nocc, visit = 1:nvisits)
 visit_data <- visit_data[order(site, occasion, visit)]
 site_data <- visit_data[, .(occasion = unique(occasion)), .(site)]
 
 # add covariates
-#visit_data$temp <- rnorm(nrow(visit_data))
-#site_data$hab <- rep(factor(sample(1:3, size = nsites, prob = c(0.2, 0.4, 0.4), replace = TRUE)), nocc)
-#site_data$cover <- rnorm(nrow(site_data))
-
+visit_data$temp <- rnorm(nrow(visit_data), 12, 5)
+site_data$hab <- rep(factor(sample(c("arable", "woodland", "urban"), size = nsites, prob = c(0.2, 0.4, 0.4), replace = TRUE)), nocc)
 site_locs <- data.frame(site = 1:nsites, x = rnorm(nsites), y = rnorm(nsites))
 site_data$x <- site_locs$x[site_data$site]
 site_data$y <- site_locs$y[site_data$site]
+site_hab <- site_data[occasion == 1]
+visit_data$hab <- site_hab$hab[visit_data$site]
 
 # formulae 
-forms <- list(psi ~ 1,  
-              p ~ s(occasion, bs = "ts", k = 5))
+forms <- list(psi ~ t2(x, y, occasion, d = c(2, 1), bs = c("ts", "cs")) + hab,  
+              p ~ s(occasion, bs = "cs", k = 5) + s(temp, bs = "cs"))
 
 # name formulae (needed for make_matrices)
 names(forms) <- c(as.character(forms[[1]][[2]]),
@@ -35,10 +36,10 @@ names(forms) <- c(as.character(forms[[1]][[2]]),
 mats <- make_matrices(forms, visit_data, site_data)
 
 # true parameters 
-beta_psi <- c(0.4)
+beta_psi <- c(0.4, 0.5, -1)
 beta_p <- c(0.7)
-z_psi <- NULL#rnorm(29, 0, 0.1)
-z_p <- rnorm(4, 0, 1)
+z_psi <- rnorm(125, 0, 0.1)
+z_p <- rnorm(13, 0, 0.5)
 
 logit_psi <- (mats$X_psi %*% c(beta_psi, z_psi))[attr(mats$X_psi, "index")]
 logit_p <- (mats$X_p %*% c(beta_p, z_p))[attr(mats$X_p, "index")] 
@@ -47,64 +48,78 @@ p <- plogis(logit_p)
 
 ## Simulate survey 
 occu <- rbinom(nrow(site_data), 1, psi)
-occu2 <- rep(occu, as.vector(nvisits[nvisits != 0]))
+occu2 <- rep(occu, each = nvisits)
 visit_data$obs <- rbinom(totvisits, 1, p * occu2)
 
-## Fit model
-start <- list(beta_psi = beta_psi, beta_p = beta_p)
-mod <- fit_occu(forms, visit_data, site_data, start = start) 
+## Fit basic model 
+m0 <- fit_occu(list(psi ~ 1, p ~ 1), visit_data, site_data) 
+m0
 
-## Look at estimates
-summary(mod)
+## Habitat effect 
+m_psihab <- fit_occu(list(psi ~ hab, p ~ 1), visit_data, site_data)
+m_phab <- fit_occu(list(psi ~ 1, p ~ hab), visit_data, site_data)
+m_psiphab <- fit_occu(list(psi ~ hab, p ~ hab), visit_data, site_data)
+AIC(m0, m_psihab, m_phab, m_psiphab)
 
-## Predict phi and p
-pred <- predict(mod, visit_data, site_data)
+## Temperature effect 
+m_temp <- fit_occu(list(psi ~ hab, p ~ temp), visit_data, site_data)
+m_temps <- fit_occu(list(psi ~ hab, p ~ s(temp, bs = "cs")), visit_data, site_data)
+AIC(m_psihab, m_temp, m_temps)
 
-plot(p, pred$p)
-abline(a = 0, b = 1)
+## Temporal effect 
+m_pt <- fit_occu(list(psi ~ hab, p ~ s(temp, bs = "cs") + s(occasion, bs = "cs", k = 5)), visit_data, site_data)
+m_psit <- fit_occu(list(psi ~ hab + s(occasion, bs = "cs", k = 5), p ~ s(temp, bs = "cs") + s(occasion, bs = "cs", k = 5)), visit_data, site_data)
 
-plot(1:nocc, psi[seq(50, length(psi), by = 100)], type = "p", pch = 19)
-lines(1:nocc, pred$psi[seq(50, length(psi), by = 100)], type = "b", pch = 19, col = "red")
+AIC(m_temps, m_pt, m_psit)
 
-## Predict for certain covariates
-#new_site_data <- data.table(site = 1:10, occasion = 1:10)
-#pred2 <- predict(mod, visit_data, new_site_data, nboot = 100)
+## Spatio-Temporal effect 
+m_psi_xyt <- fit_occu(list(psi ~ t2(x, y, occasion, bs = c("ts", "cs"), d = c(2, 1)) + hab, 
+                           p ~ s(temp, bs = "cs") + s(occasion, bs = "cs", k = 5)), visit_data, site_data)
 
-#plot(1:10, pred2$psi, type = "b")
+AIC(m_pt, m_psit, m_psi_xyt)
 
-# matlines(t(pred2$psiboot), col = "grey80")
-# ucl <- apply(pred2$psiboot, 2, quantile, probs = 0.975)
-# lcl <- apply(pred2$psiboot, 2, quantile, probs = 0.025)
-# plot(1:5, pred2$psi, type = "b", pch = 20, ylim = c(min(lcl), max(ucl)))
-# lines(1:5, lcl, lty = "dotted")
-# lines(1:5, ucl, lty = "dotted")
-# 
-# tempgrid <- seq(min(visit_data$temp), max(visit_data$temp), length = 100)
-# new_visit_data <- data.table(site = 1, occasion = 1, visit = 1, temp = tempgrid)
-# 
-# predtemp <- predict(mod, new_visit_data, site_data, nboot = 1000)
-# ucl <- apply(predtemp$pboot, 2, quantile, probs = 0.975)
-# lcl <- apply(predtemp$pboot, 2, quantile, probs = 0.025)
-# plot(tempgrid, predtemp$p, type = "l", lwd = 1.5, ylim = c(min(lcl), max(ucl)))
-# lines(tempgrid, lcl, lwd = 1.5, lty = "dotted")
-# lines(tempgrid, ucl, lwd = 1.5, lty = "dotted")
-# 
-# mats <- make_matrices(forms, new_visit_data, site_data)
-# truetemp <- plogis(mats$X_p %*% beta_p + mats$Z_p %*% z_p)
-# lines(tempgrid, truetemp, col = "red", lwd = 1.5)
-# 
-# ## Test by simulation
-nsims <- 100
-mods <- vector(mode = "list", length = nsims)
-for (sim in 1:nsims) {
-  cat(sim, " / ", nsims, "\r")
-  ## Simulate data
-  occu <- rbinom(nrow(site_data), 1, psi)
-  occu2 <- rep(occu, as.vector(nvisits[nvisits != 0]))
-  visit_data$obs <- rbinom(totvisits, 1, p * occu2)
-  ## Fit model
-  mods[[sim]] <- fit_occu(forms, visit_data, site_data, print = FALSE)
-}
+## Inference
+m <- m_psi_xyt
+m
 
-ests <- sapply(mods, FUN = function(x) {x$res$par.fixed})
-rowMeans(ests)
+# temperature effect 
+tempgr <- seq(-5, 25, 0.1)
+pred_temp <- predict(m, data.table(occasion = 1, temp = tempgr), site_data, nboot = 1000)
+ci <- apply(pred_temp$pboot, 2, quantile, prob = c(0.025, 0.975))
+plot(tempgr, pred_temp$p, type = "l", lwd = 1.5, ylim = c(min(ci[1,]), max(ci[2,])), xlab = "Temperature", ylab = "Detection Probability")
+lines(tempgr, ci[1,], lty = "dotted")
+lines(tempgr, ci[2,], lty = "dotted")
+
+# occasion effect 
+pred_occ <- predict(m, data.table(occasion = 1:nocc, temp = 18), site_data, nboot = 1000)
+ci <- apply(pred_occ$pboot, 2, quantile, prob = c(0.025, 0.975))
+plot(1:nocc, pred_occ$p, type = "b", pch = 19, lwd = 1.5, ylim = c(min(ci[1,]), max(ci[2,])), xlab = "Temperature", ylab = "Detection Probability")
+lines(1:nocc, ci[1,], lty = "dotted")
+lines(1:nocc, ci[2,], lty = "dotted")
+
+# spatial effect 
+xgr <- seq(-2, 2.5, 0.1)
+ygr <- seq(-2, 2.5, 0.1)
+gr <- expand.grid(xgr, ygr)
+pred_xy <- predict(m, visit_data, data.table(occasion = 1, x = gr[,1], y = gr[,2], hab = "arable"), nboot = 1000)
+
+ggplot() + 
+  geom_tile(aes(x = gr[,1], y = gr[,2], fill = pred_xy$psi)) + 
+  theme_bw() + 
+  scale_x_continuous("x") + 
+  scale_y_continuous("y") + 
+  scale_fill_viridis_c("Occupancy")
+
+# spatio-temporal effect 
+xgr <- rep(gr[,1], nocc)
+ygr <- rep(gr[,2], nocc)
+tgr <- rep(1:nocc, each = nrow(gr))
+pred_xyt <- predict(m, visit_data, data.table(occasion = tgr, x = xgr, y = ygr, hab = "arable"), nboot = 1000)
+
+ggplot(data.frame(x = xgr, y = ygr, t = tgr, psi = pred_xyt$psi)) + 
+  geom_tile(aes(x = x, y = y, group = t, fill = psi)) + 
+  theme_bw() + 
+  facet_wrap(~t) + 
+  scale_x_continuous("x") + 
+  scale_y_continuous("y") + 
+  scale_fill_viridis_c("Occupancy")
