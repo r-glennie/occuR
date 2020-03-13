@@ -221,7 +221,7 @@ check_inp <- function(forms, visit_data, site_data, start, print) {
   if (any(abs(visit_data$obs) > 1e-10 & abs(visit_data$obs - 1) > 1e-10)) stop("visit_data obs has entries that are not zero or one")
   
   # check site data 
-  num <- site_data[, .(max = max(site), n = uniqueN(site)), .(occasion)]
+  num <- site_data[, .(max = max(site), n = uniqueN(site))]
   if (any(num$max != num$n)) stop("site_data has missing sites or sites are mis-numered: ", num[which(num$max  != num$n,)])
   num <- site_data[, .(max = max(occasion), n = uniqueN(occasion))]
   if (any(num$max != num$n)) stop("site_data has missing occasions or occasions are mis-numered")
