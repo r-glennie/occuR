@@ -232,7 +232,7 @@ check_inp <- function(forms, visit_data, site_data, start, print) {
   siteocc <- paste0(visit_data$site, visit_data$occasion)
   siteocc2 <- paste0(site_data$site, site_data$occasion)  
   if (!all(siteocc %in% siteocc2)) stop("visit_data has sites with occasions not included in site_data")
-  if (!all(siteocc2) %in% siteocc) stop("site_data has sites with occasions where no visits are recorded in visit_data")
+  if (!all(siteocc2 %in% siteocc)) stop("site_data has sites with occasions where no visits are recorded in visit_data")
   
   # check start 
   if (!is.null(start)) {
