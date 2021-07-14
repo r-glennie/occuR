@@ -138,7 +138,7 @@ fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
   if (!is.null(start)) {
     len <- min(length(start$beta_psi), beta_psi)
     beta_psi[1:len] <- start$beta_psi[1:len]
-    len <- min(length(start$beta_psi), beta_psi)
+    len <- min(length(start$beta_p), beta_p)
     beta_p[1:len] <- start$beta_p[1:len] 
   }
   
