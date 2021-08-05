@@ -1,0 +1,13 @@
+citHeader("To cite occuR:")
+
+citEntry(entry = "Misc",
+  title        = "occuR: a R package for fitting occupancy models with Template Model Builder and mgcv",
+  author       = personList(as.person("Richard Glennie")),
+  year         = "2021",
+  url          = "https://github.com/r-glennie/occuR",
+
+  textVersion  =
+  paste("Richard Glennie (2021).",
+        "occuR: a R package for fitting occupancy models with Template Model Builder and mgcv",
+        "URL: https://github.com/r-glennie/occuR")
+)
