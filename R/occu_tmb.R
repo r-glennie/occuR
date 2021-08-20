@@ -216,13 +216,9 @@ check_inp <- function(forms, visit_data, site_data, start, print) {
   if (!("occasion" %in% colnames(visit_data))) stop("visit_data does not have a column named 'occasion'")
   if (!("visit" %in% colnames(visit_data))) stop("visit_data does not have a column named 'visit'")
   if ("p" %in% colnames(visit_data)) stop("visit_data cannot have a column named 'p'")
-  num <- visit_data[, .(max = max(visit), n = uniqueN(visit)), .(site, occasion)]
-  if (any(num$max != num$n)) stop("visit_data has missing visits or visits are mis-numbered: ", num[which(num$max != num$n),])
   if (any(abs(visit_data$obs) > 1e-10 & abs(visit_data$obs - 1) > 1e-10)) stop("visit_data obs has entries that are not zero or one")
   
   # check site data 
-  num <- site_data[, .(max = max(site), n = uniqueN(site))]
-  if (any(num$max != num$n)) stop("site_data has missing sites or sites are mis-numered: ", num[which(num$max  != num$n,)])
   num <- site_data[, .(max = max(occasion), n = uniqueN(occasion))]
   if (any(num$max != num$n)) stop("site_data has missing occasions or occasions are mis-numered")
   if ("psi" %in% colnames(site_data)) stop("site_data cannot have a column named 'psi'")
