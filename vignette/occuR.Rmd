@@ -1,10 +1,7 @@
 ---
 title: "occuR"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{occuR}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
+output:
+  html_document: default
 ---
 
 ```{r, include = FALSE}
@@ -58,7 +55,8 @@ Here is an example of the `visit_data` data table:
 visit_data 
 ```
 
-The columns which are essential are "site" (which site the visit took place on), "occasion" (in which occasion the visit took place), "visit" (which visit this refers to), and "obs" (whether or not the target species was detected). One important thing to note is that visits should be numbered 1, 2, 3, ... within each site and occasion. So, the visit column will be 1 for every first visit to each site on each occasion. 
+The columns which are essential are "site" (which site the visit took place on), "occasion" (in which occasion the visit took place), "visit" (which visit this refers to), and "obs" (whether or not the target species was detected). 
+
 The remaining columns are covariates defined for each visit. The covariate `temp` is the air temperature on each visit since for this example there is an hypothesis this temperature affects the availability of the target species (it comes out only a specific temperatures) --- notice this: detection probability is not only a model of how well recorders can detect species but also how available the species are for detection. Moreover, detection probability can model the occurrence of a species within occasion (for example if month or day of year were used as a covariate). The other covariate is `hab`, the habitat type for that site, this does change over visits but must be included in `visit_data` if I want to model how detection probability changes with habitat type. So, in general, all covariates that affect $p$ must be in a column of `visit_data`. 
 
 Let's look at `site_data`: 
@@ -67,7 +65,7 @@ Let's look at `site_data`:
 site_data
 ```
 
-The essential columns in `site_data` are "site" (all sites are numbered 1 upwards), "occasion" (occasions are numbered 1 upwards, but not every site must be included for every occasion). The remaining columns are covariates: `hab` the habitat type and geographic coordinates `x` and `y`. Any covariates I want to use when modelling $psi$ must be included as a column in `site_data`. 
+The essential columns in `site_data` are "site", "occasion" (occasions are numbered 1 upwards, but not every site must be included for every occasion). The remaining columns are covariates: `hab` the habitat type and geographic coordinates `x` and `y`. Any covariates I want to use when modelling $psi$ must be included as a column in `site_data`. 
 
 Overall, it is important to remember that $p$ can change for each visit and the information in each row of `visit_data` allows us to predict $p$ for each visit; $psi$ can only change for each site on each occasion and so each row of `site_data` contains the information to predict $psi$. 
 
