@@ -9,7 +9,7 @@ Description: Fits occupancy models for data observed over more than one occasion
 License: MIT + Licence
 Depends: R (>= 3.5.0), methods, mgcv, data.table, TMB, RcppEigen, Matrix
 LinkingTo: TMB, RcppEigen 
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.2
 Suggests: 
     knitr,
     rmarkdown
