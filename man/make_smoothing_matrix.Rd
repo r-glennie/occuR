@@ -10,7 +10,7 @@ make_smoothing_matrix(gm)
 \item{gm}{value returned by mgcv::gam with fit = FALSE}
 }
 \value{
-list of S (block diagonal smoothing matrix), Scols (number of columns for each smoothing matrix), 
+list of S (block diagonal smoothing matrix), Scols (number of columns for each smoothing matrix),
 bdim (k argument used for each smooth), Snames (names of smoothing parameters). Returns NULL if no smooths in
 model.
 }

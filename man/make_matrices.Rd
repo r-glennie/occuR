@@ -14,7 +14,7 @@ make_matrices(forms, visit_data, site_data)
 \item{site_data}{see fit_occu function}
 }
 \value{
-list of X = fixed effects design matrix, Z = random effects design matrix, 
+list of X = fixed effects design matrix, Z = random effects design matrix,
   and S = smoothing matrix for both psi and p (e.g. X_psi)
 }
 \description{
