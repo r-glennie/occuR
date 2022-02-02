@@ -41,7 +41,7 @@ make_smoothing_matrix <- function(gm) {
 #' @export
 #'
 #' @examples
-#' @importFrom mgcv gam
+#' @importFrom mgcv gam uniquecombs
 #' @importFrom mgcv predict.gam
 #' @importFrom methods as
 make_matrices <- function(forms, visit_data, site_data) {
@@ -351,7 +351,7 @@ predict.occuR <- function(obj, visit_data, site_data, nboot = 0) {
 #' and is based on Wood et al. (2017) p 212.
 #'
 #' @return estimated degrees of freedom
-#' @importFrom Matrix solve
+#' @importFrom Matrix solve diag
 edf.occuR <- function(X, S, lambda, Sn){
   if (length(lambda) == 0) return(0)
 

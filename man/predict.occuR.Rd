@@ -16,7 +16,7 @@
 \item{nboot}{number of parametric bootstrap resamples to produce from fitted model}
 }
 \value{
-if nboot = 0 (default), the list of fitted psi and p values; otherwise, list also 
+if nboot = 0 (default), the list of fitted psi and p values; otherwise, list also
 contains matrix for psi and p where each row is a bootstrap resample
 }
 \description{
