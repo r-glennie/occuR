@@ -318,9 +318,13 @@ predict.occuR <- function(obj, visit_data, site_data, nboot = 0) {
   pred <- get_predicted_values(fix, ran, mats)
   if (nboot > 0.5) {
     Q <- obj$res$jointPrecision
-    Q <- Q[!grepl("log_lambda_", colnames(Q)), 
-           !grepl("log_lambda_", colnames(Q)), drop = FALSE]
-    V <- solve(Q)
+    if (!is.null(Q)) {
+      Q <- Q[!grepl("log_lambda_", colnames(Q)), 
+             !grepl("log_lambda_", colnames(Q)), drop = FALSE]
+      V <- solve(Q)
+    } else {
+      V <- obj$res$cov.fixed
+    }
     param <- c(fix, ran)
     param <- param[!grepl("log_lambda", names(param))]
     boots <- rmvn(nboot, param, V)
