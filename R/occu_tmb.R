@@ -329,7 +329,6 @@ predict.occuR <- function(obj, visit_data, site_data, nboot = 0) {
     Q <- Q[!grepl("log_lambda_", colnames(Q)),
            !grepl("log_lambda_", colnames(Q)), drop = FALSE]
     V <- solve(Q)
->>>>>>> 92a3f93 (predict and edf use Matrix::solve)
     param <- c(fix, ran)
     param <- param[!grepl("log_lambda", names(param))]
     boots <- rmvn(nboot, param, V)
