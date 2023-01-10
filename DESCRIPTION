@@ -10,6 +10,7 @@ License: MIT + Licence
 Depends: R (>= 3.5.0), methods, mgcv, data.table, TMB, RcppEigen, Matrix
 LinkingTo: TMB, RcppEigen 
 RoxygenNote: 7.2.3
+Encoding: UTF-8
 Suggests: 
     knitr,
     rmarkdown
