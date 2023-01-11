@@ -19,7 +19,7 @@ make_smoothing_matrix <- function(gm) {
   for (i in seq_along(gm$smooth)) {
     sm <- gm$smooth[[i]]
     for (j in seq_along(sm$S)) {
-      S <- c(S, as(sm$S[[j]], "sparseMatrix"))
+        S <- c(S, as(as(as(sm$S[[j]], "dMatrix"), "generalMatrix"), "TsparseMatrix"))
       Sncols <- c(Sncols, ncol(sm$S[[j]]))
       bdim <- c(bdim, sm$bs.dim)
       smnames <- c(smnames, attr(sm$sp, "names"))
@@ -147,7 +147,7 @@ fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
   if (is.null(mats$S_psi)) {
     z_psi <- 0
     log_lambda_psi <- 0
-    tmb_dat$S_psi <- as(matrix(0, 1, 1), "sparseMatrix")
+    tmb_dat$S_psi <- as(as(as(matrix(0, 1, 1), "dMatrix"), "generalMatrix"), "TsparseMatrix")
     tmb_dat$S_psi_n <- -1
     map <- c(map, list(z_psi = as.factor(NA), log_lambda_psi = as.factor(NA)))
   } else {
@@ -159,7 +159,7 @@ fit_occu <- function(forms, visit_data, site_data, start = NULL, print = TRUE) {
   if (is.null(mats$S_p)) {
     z_p <- 0
     log_lambda_p <- 0
-    tmb_dat$S_p <- as(matrix(0, 1, 1), "sparseMatrix")
+    tmb_dat$S_p <- as(as(as(matrix(0, 1, 1), "dMatrix"), "generalMatrix"), "TsparseMatrix")
     tmb_dat$S_p_n <- -1
     map <- c(map, list(z_p = as.factor(NA), log_lambda_p = as.factor(NA)))
   } else {
