@@ -1,6 +1,6 @@
-## Data 
+## Data
 
-#' Example analysis 
-#' 
+#' Example analysis
+#'
 #' Has example data and fitted model objects
-"example_analysis"
+#' "example_analysis"

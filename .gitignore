@@ -38,3 +38,8 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 .Rproj.user
+
+# Compiling variables
+src\*.o$
+src\*.so$
+src\*.dll$
